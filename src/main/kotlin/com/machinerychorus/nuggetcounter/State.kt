@@ -5,7 +5,6 @@ import mu.KotlinLogging
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.time.Instant
 
 object State {
     private val logger = KotlinLogging.logger {}
@@ -15,9 +14,9 @@ object State {
      * nuggetCount is stored as a string rather than an int because
      * Element.text() only accepts KVal<String>
      */
-    data class Team(val uid: String, val nuggetsRemaining: String = "2000")
+    data class Team(val uid: String, val nuggetsRemaining: Int = 2000)
 
-    data class User(val uid: String, val teamUid: String, val name:String, val nuggetCount: String = "0")
+    data class User(val uid: String, val teamUid: String, val name:String, val nuggetCount: Int = 0)
 
     val teams = Shoebox<Team>(dir.resolve("teams"))
 
@@ -32,15 +31,13 @@ object State {
             logger.debug("User was changed.")
             //remove the previous value from the nugget count
             teams.modify(prevVal.teamUid){
-                val nuggets = prevVal.nuggetCount.toInt()
-                Team(it.uid, it.nuggetsRemaining.toInt().plus(nuggets).toString())
+                Team(it.uid, it.nuggetsRemaining.plus(prevVal.nuggetCount))
             }
 
             //add the new value
             val newUser = newVal.value
             teams.modify(newUser.teamUid){
-                val nuggets = newUser.nuggetCount.toInt()
-                Team(it.uid, it.nuggetsRemaining.toInt().minus(nuggets).toString())
+                Team(it.uid, it.nuggetsRemaining.minus(newUser.nuggetCount))
             }
             //I think this will also cover people switching teams
         }

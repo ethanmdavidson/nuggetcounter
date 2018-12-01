@@ -109,26 +109,24 @@ fun main(args: Array<String>) {
                                                     url.path.value = listOf(teamUrl, teamName, userByUid.name)
                                                 } else {
                                                     //show controls
-                                                    h4().text("You have eaten ")
-                                                    h4().text(toVar(State.users, uid).map(State.User::nuggetCount))
-                                                    h4().text(" nuggets")
+                                                    h4().text(toVar(State.users, uid).map{
+                                                        "You have eaten ${it.nuggetCount} nuggets"
+                                                    })
                                                     div(s.ui.action.input).new {
                                                         button(s.ui.button).text("NOM").on.click{
-                                                            logger.debug("clicked NOM")
-                                                            State.users.modify(uid){
-                                                                val newCount = userByUid.nuggetCount.toInt().inc()
-                                                                logger.debug("new count: $newCount")
-                                                                State.User(uid, teamName, userName, newCount.toString())
+                                                            State.users.modify(uid){ user ->
+                                                                val newCount = user.nuggetCount.inc()
+                                                                State.User(user.uid, user.teamUid, user.name, newCount)
                                                             }
                                                         }
                                                         button(s.ui.button).text("undo").on.click{
                                                             logger.debug("Clicked undo")
-                                                            State.users.modify(uid){
-                                                                var newCount = userByUid.nuggetCount.toInt().dec()
+                                                            State.users.modify(uid){ user ->
+                                                                var newCount = user.nuggetCount.dec()
                                                                 if(newCount < 0){
                                                                     newCount = 0
                                                                 }
-                                                                State.User(uid, teamName, userName, newCount.toString())
+                                                                State.User(user.uid, user.teamUid, user.name, newCount)
                                                             }
                                                         }
                                                     }
@@ -168,11 +166,7 @@ private fun openTeam(nameInput:InputElement, url: KVar<URL>) {
 private fun ElementCreator<*>.renderTeam(team: KVar<State.Team>) {
     //val users = State.usersByTeam(team.value.uid)
     h3().new{
-        div().text("Team ")
-        div().text(team.map(State.Team::uid))
-        div().text(" has ")
-        div().text(team.map(State.Team::nuggetsRemaining))
-        p().text(" nuggets remaining.")
+        div().text(team.map{ "Team ${it.uid} has ${it.nuggetsRemaining} nuggets remaining."})
     }
     //TODO: show list of users and their count
 }
