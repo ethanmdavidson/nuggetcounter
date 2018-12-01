@@ -1,8 +1,6 @@
 package com.machinerychorus.nuggetcounter
 
-import io.kweb.Kweb
-import io.kweb.NotFoundException
-import io.kweb.ROOT_PATH
+import io.kweb.*
 import io.kweb.dom.BodyElement
 import io.kweb.dom.element.creation.ElementCreator
 import io.kweb.dom.element.creation.tags.*
@@ -23,6 +21,7 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import java.util.*
+import java.util.concurrent.CompletableFuture
 import io.kweb.plugins.semanticUI.semantic as s
 
 private val logger = KotlinLogging.logger {}
@@ -53,7 +52,7 @@ fun main(args: Array<String>) {
                 /** s.content uses the semanticUIPlugin to use the excellent
                 Semantic UI framework, included as a plugin above, and implemented
                 as a convenient DSL within Kweb */
-                div(s.content).new {
+                div(s.content.centered).new {
 
                     /** Note how url.path[0] is itself a KVar.  Changes to firstPathElement
                     will automatically propagate _bi-directionally_ with `url`.  This
@@ -67,6 +66,7 @@ fun main(args: Array<String>) {
                         when (entityType) {
                             ROOT_PATH -> {
                                 div(s.ui.action.input).new {
+                                    //TODO: list existing teams?
                                     inputWithButton("Enter Team Name", "View"){ input ->
                                         openTeam(input, url)
                                     }
@@ -85,23 +85,36 @@ fun main(args: Array<String>) {
                                     render(url.path[2]) { action ->
                                         when(action){
                                             loginUrl -> {
+                                                //if UID exists and matches a user, redirect to that user
+                                                //val uid: String? = httpRequestInfo.cookies[uidKey]
                                                 GlobalScope.launch {
-                                                    //if UID exists and matches a user, redirect to that user
-                                                    val uid: String? = doc.body.jsCookie().get(uidKey).await()
-                                                    if(uid != null && uid.isNotEmpty() && State.users[uid] != null) {
+                                                    val uid = getString(doc.cookie.receiver, uidKey).await()
+                                                    if (uid != null && uid.isNotEmpty() && State.users[uid] != null) {
                                                         val user = State.users[uid]
-                                                        url.path.value = listOf(teamUrl, teamName, userUrl, user!!.name)
+                                                            ?: throw NullPointerException("Couldn't load user $uid")
+                                                        logger.info("/login called for existing user ${user.name} (${user.uid})")
+                                                        url.path.value = listOf(teamUrl, teamName, userUrl, user.name)
                                                     } else {
                                                         //otherwise show login
+                                                        logger.info("Showing login for team '$teamName'")
                                                         div().new {
                                                             h4().text("Join this team:")
                                                             inputWithButton("Username", "Join!") {
                                                                 val newUid = generateNewUid()
-                                                                it.jsCookie().set(uidKey, newUid)
+                                                                //it.jsCookie().set(uidKey, newUid)
+                                                                doc.cookie.setString(uidKey, newUid)
+                                                                logger.debug("Created new UID: $newUid")
                                                                 GlobalScope.launch {
                                                                     val newUsername = it.getValue().await()
-                                                                    State.users[newUid] = State.User(newUid, teamName, newUsername)
-                                                                    url.path.value = listOf(teamUrl, teamName, userUrl, newUsername)
+                                                                    State.users[newUid] =
+                                                                            State.User(newUid, teamName, newUsername)
+                                                                    logger.info("Created user '$newUsername' with uid '$newUid' for team '$teamName'")
+                                                                    url.path.value = listOf(
+                                                                        teamUrl,
+                                                                        teamName,
+                                                                        userUrl,
+                                                                        newUsername
+                                                                    )
                                                                 }
                                                             }
                                                         }
@@ -109,36 +122,50 @@ fun main(args: Array<String>) {
                                                 }
                                             }
                                             userUrl -> {
-                                                GlobalScope.launch{
-                                                    val uid: String? = doc.body.jsCookie().get(uidKey).await()
+                                                //val uid: String? = httpRequestInfo.cookies[uidKey]
+                                                GlobalScope.launch {
+                                                    val uid = getString(doc.cookie.receiver, uidKey).await()
                                                     //if UID doesn't exist or doesn't match this user, redirect to login
-                                                    if(uid == null
+                                                    if (uid == null
                                                         || uid.isEmpty()
                                                         || State.users[uid] == null
                                                         || url.path.value.size < 4
-                                                        || url.path[3].value != State.users[uid]!!.name) {
+                                                        || url.path[3].value != State.users[uid]!!.name
+                                                    ) {
+                                                        logger.info("/user called with incomplete credentials, uid '$uid'")
                                                         url.path.value = listOf(teamUrl, teamName, loginUrl)
                                                     } else {
                                                         //otherwise show controls
-                                                        h4().text(toVar(State.users, uid).map{
+                                                        logger.info("loaded user page for ${url.path[3].value} ($uid)")
+                                                        h4().text(toVar(State.users, uid).map {
                                                             "You have eaten ${it.nuggetCount} nuggets"
                                                         })
                                                         div(s.ui.action.input).new {
-                                                            button(s.ui.button).text("NOM").on.click{
-                                                                State.users.modify(uid){ user ->
+                                                            button(s.ui.button).text("NOM").on.click {
+                                                                State.users.modify(uid) { user ->
                                                                     val newCount = user.nuggetCount.inc()
-                                                                    State.User(user.uid, user.teamUid, user.name, newCount)
+                                                                    State.User(
+                                                                        user.uid,
+                                                                        user.teamUid,
+                                                                        user.name,
+                                                                        newCount
+                                                                    )
                                                                 }
                                                             }
-                                                            button(s.ui.button).text("undo").on.click{
-                                                                State.users.modify(uid){ user ->
+                                                            button(s.ui.button).text("undo").on.click {
+                                                                State.users.modify(uid) { user ->
                                                                     logger.debug("count before: ${user.nuggetCount}")
                                                                     var newCount = user.nuggetCount.dec()
                                                                     logger.debug("new count: ${newCount}")
-                                                                    if(newCount < 0){
+                                                                    if (newCount < 0) {
                                                                         newCount = 0
                                                                     }
-                                                                    State.User(user.uid, user.teamUid, user.name, newCount)
+                                                                    State.User(
+                                                                        user.uid,
+                                                                        user.teamUid,
+                                                                        user.name,
+                                                                        newCount
+                                                                    )
                                                                 }
                                                             }
                                                         }
@@ -162,8 +189,8 @@ fun main(args: Array<String>) {
 
 private fun ElementCreator<BodyElement>.pageBorderAndTitle(title: String, content: ElementCreator<DivElement>.() -> Unit) {
     div(s.ui.one.column.centered.grid).new {
-        div(s.column).new {
-            h1(s.ui.dividing.header).text(title)
+        div(s.column.centered).new {
+            h1(s.ui.dividing.header.centered).text(title)
             content(this)
         }
     }
@@ -178,9 +205,7 @@ private fun openTeam(nameInput:InputElement, url: KVar<URL>) {
 
 private fun ElementCreator<*>.renderTeam(team: KVar<State.Team>) {
     //val users = State.usersByTeam(team.value.uid)
-    h3().new{
-        div().text(team.map{ "Team ${it.uid} has ${it.nuggetsRemaining} nuggets remaining."})
-    }
+    h3(s.center).text(team.map{ "Team ${it.uid} has ${it.nuggetsRemaining} nuggets remaining."})
     //TODO: show list of users and their count
 }
 
@@ -206,3 +231,20 @@ private fun ElementCreator<DivElement>.inputWithButton(placeholder:String, butto
 }
 
 private fun generateNewUid() = UUID.randomUUID().toString()
+
+/**
+ * There is a typo in the js used to work with cookies.
+ * The function is docCookies.getItems (plural) but CookieReceiver.getString is
+ *  calling docCookies.getItem (singular)
+ *  https://github.com/kwebio/core/issues/41
+ */
+fun getString(receiver: WebBrowser, name: String): CompletableFuture<String?> {
+    return receiver.evaluate("docCookies.getItems(${name.toJson()});")
+        .thenApply {
+            if (it == "__COOKIE_NOT_FOUND_TOKEN__") {
+                null
+            } else {
+                it
+            }
+        }
+}
