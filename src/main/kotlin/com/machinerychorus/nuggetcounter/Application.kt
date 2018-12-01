@@ -27,6 +27,8 @@ import io.kweb.plugins.semanticUI.semantic as s
 
 private val logger = KotlinLogging.logger {}
 const val teamUrl = "team"
+const val loginUrl = "login"
+const val userUrl = "user"
 const val uidKey = "uid"
 
 fun main(args: Array<String>) {
@@ -80,53 +82,64 @@ fun main(args: Array<String>) {
                                     } catch (e: NoSuchElementException) {
                                         throw NotFoundException("Can't find team with name '$teamName'")
                                     }
-                                    render(url.path[2]) { userName ->
-                                        GlobalScope.launch {
-                                            val uid: String? = doc.body.jsCookie().get(uidKey).await()
-
-                                            //if uid doesn't exist, show login
-                                            if(uid == null || uid.isEmpty()){
-                                                div().new {
-                                                    h4().text("Join this team:")
-                                                    inputWithButton("Username", "Join!") {
-                                                        val newUid = generateNewUid()
-                                                        it.jsCookie().set(uidKey, newUid)
-                                                        GlobalScope.launch {
-                                                            val newUsername = it.getValue().await()
-                                                            State.users[newUid] = State.User(newUid, teamName, newUsername)
-                                                            url.path.value = listOf(teamUrl, teamName, newUsername)
+                                    render(url.path[2]) { action ->
+                                        when(action){
+                                            loginUrl -> {
+                                                GlobalScope.launch {
+                                                    //if UID exists and matches a user, redirect to that user
+                                                    val uid: String? = doc.body.jsCookie().get(uidKey).await()
+                                                    if(uid != null && uid.isNotEmpty() && State.users[uid] != null) {
+                                                        val user = State.users[uid]
+                                                        url.path.value = listOf(teamUrl, teamName, userUrl, user!!.name)
+                                                    } else {
+                                                        //otherwise show login
+                                                        div().new {
+                                                            h4().text("Join this team:")
+                                                            inputWithButton("Username", "Join!") {
+                                                                val newUid = generateNewUid()
+                                                                it.jsCookie().set(uidKey, newUid)
+                                                                GlobalScope.launch {
+                                                                    val newUsername = it.getValue().await()
+                                                                    State.users[newUid] = State.User(newUid, teamName, newUsername)
+                                                                    url.path.value = listOf(teamUrl, teamName, userUrl, newUsername)
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            } else {
-                                                val userByUid = State.users[uid]
-                                                if(userByUid == null){
-                                                    GlobalScope.launch{
-                                                        doc.body.jsCookie().remove(uidKey)
-                                                        url.path.value = listOf(teamUrl, teamName)
-                                                    }
-                                                } else if (userByUid.name != userName){
-                                                    url.path.value = listOf(teamUrl, teamName, userByUid.name)
-                                                } else {
-                                                    //show controls
-                                                    h4().text(toVar(State.users, uid).map{
-                                                        "You have eaten ${it.nuggetCount} nuggets"
-                                                    })
-                                                    div(s.ui.action.input).new {
-                                                        button(s.ui.button).text("NOM").on.click{
-                                                            State.users.modify(uid){ user ->
-                                                                val newCount = user.nuggetCount.inc()
-                                                                State.User(user.uid, user.teamUid, user.name, newCount)
-                                                            }
-                                                        }
-                                                        button(s.ui.button).text("undo").on.click{
-                                                            logger.debug("Clicked undo")
-                                                            State.users.modify(uid){ user ->
-                                                                var newCount = user.nuggetCount.dec()
-                                                                if(newCount < 0){
-                                                                    newCount = 0
+                                            }
+                                            userUrl -> {
+                                                GlobalScope.launch{
+                                                    val uid: String? = doc.body.jsCookie().get(uidKey).await()
+                                                    //if UID doesn't exist or doesn't match this user, redirect to login
+                                                    if(uid == null
+                                                        || uid.isEmpty()
+                                                        || State.users[uid] == null
+                                                        || url.path.value.size < 4
+                                                        || url.path[3].value != State.users[uid]!!.name) {
+                                                        url.path.value = listOf(teamUrl, teamName, loginUrl)
+                                                    } else {
+                                                        //otherwise show controls
+                                                        h4().text(toVar(State.users, uid).map{
+                                                            "You have eaten ${it.nuggetCount} nuggets"
+                                                        })
+                                                        div(s.ui.action.input).new {
+                                                            button(s.ui.button).text("NOM").on.click{
+                                                                State.users.modify(uid){ user ->
+                                                                    val newCount = user.nuggetCount.inc()
+                                                                    State.User(user.uid, user.teamUid, user.name, newCount)
                                                                 }
-                                                                State.User(user.uid, user.teamUid, user.name, newCount)
+                                                            }
+                                                            button(s.ui.button).text("undo").on.click{
+                                                                State.users.modify(uid){ user ->
+                                                                    logger.debug("count before: ${user.nuggetCount}")
+                                                                    var newCount = user.nuggetCount.dec()
+                                                                    logger.debug("new count: ${newCount}")
+                                                                    if(newCount < 0){
+                                                                        newCount = 0
+                                                                    }
+                                                                    State.User(user.uid, user.teamUid, user.name, newCount)
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -159,7 +172,7 @@ private fun ElementCreator<BodyElement>.pageBorderAndTitle(title: String, conten
 private fun openTeam(nameInput:InputElement, url: KVar<URL>) {
     GlobalScope.launch {
         val name = nameInput.getValue().await()
-        url.path.value = listOf(teamUrl, name)
+        url.path.value = listOf(teamUrl, name, loginUrl)
     }
 }
 

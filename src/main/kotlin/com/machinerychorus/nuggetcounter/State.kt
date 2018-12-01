@@ -28,7 +28,7 @@ object State {
     init {
         //wire the listeners for keeping the count up-to-date
         users.onChange{ prevVal, newVal, src ->
-            logger.debug("User was changed.")
+            logger.debug("User was changed. ${prevVal.nuggetCount} -> ${newVal.value.nuggetCount}")
             //remove the previous value from the nugget count
             teams.modify(prevVal.teamUid){
                 Team(it.uid, it.nuggetsRemaining.plus(prevVal.nuggetCount))
