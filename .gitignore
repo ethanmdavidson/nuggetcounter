@@ -1,0 +1,10 @@
+/.gradle
+/.idea
+/out
+/build
+*.iml
+*.ipr
+*.iws
+
+# <project root>/shoebox is currently used as the store location
+/shoebox
