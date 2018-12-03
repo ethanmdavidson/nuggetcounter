@@ -10,10 +10,6 @@ object State {
     private val logger = KotlinLogging.logger {}
     val dir: Path = Files.createDirectories(Paths.get("", "shoebox"))
 
-    /**
-     * nuggetCount is stored as a string rather than an int because
-     * Element.text() only accepts KVal<String>
-     */
     data class Team(val uid: String, val nuggetsRemaining: Int = 2000)
 
     data class User(val uid: String, val teamUid: String, val name:String, val nuggetCount: Int = 0)
@@ -22,12 +18,14 @@ object State {
 
     val users = Shoebox<User>(dir.resolve("users"))
 
-    fun usersByTeam(teamUid: String) = users.view("usersByTeam", User::teamUid).orderedSet(teamUid, compareBy(
-        User::name))
+    //You can only have one instance of each view (or shoebox) because of the way locking works in directorystore
+    private val usersByTeam = users.view("usersByTeam", User::teamUid)
+
+    fun usersByTeam(teamUid: String) = usersByTeam.orderedSet(teamUid, compareBy(User::name))
 
     init {
         //wire the listeners for keeping the count up-to-date
-        users.onChange{ prevVal, newVal, src ->
+        users.onChange{ prevVal, newVal, _ ->
             logger.debug("User was changed. ${prevVal.nuggetCount} -> ${newVal.value.nuggetCount}")
             //remove the previous value from the nugget count
             teams.modify(prevVal.teamUid){

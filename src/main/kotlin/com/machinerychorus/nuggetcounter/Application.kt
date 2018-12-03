@@ -14,6 +14,7 @@ import io.kweb.routing.simpleUrlParser
 import io.kweb.routing.url
 import io.kweb.state.KVar
 import io.kweb.state.persistent.render
+import io.kweb.state.persistent.renderEach
 import io.kweb.state.persistent.toVar
 import io.mola.galimatias.URL
 import kotlinx.coroutines.GlobalScope
@@ -206,7 +207,17 @@ private fun openTeam(nameInput:InputElement, url: KVar<URL>) {
 private fun ElementCreator<*>.renderTeam(team: KVar<State.Team>) {
     //val users = State.usersByTeam(team.value.uid)
     h3(s.center).text(team.map{ "Team ${it.uid} has ${it.nuggetsRemaining} nuggets remaining."})
-    //TODO: show list of users and their count
+    div(s.ui.middle.aligned.divided.list).new {
+        try {
+            renderEach(State.usersByTeam(team.value.uid)) { user ->
+                div(s.item).new {
+                    div(s.content).text(user.map { "${it.name} : ${it.nuggetCount}" })
+                }
+            }
+        } catch(e:RuntimeException){
+            logger.error("Failed the renderEach", e)
+        }
+    }
 }
 
 /**
