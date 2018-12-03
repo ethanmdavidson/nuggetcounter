@@ -36,33 +36,14 @@ fun main(args: Array<String>) {
 
     Kweb(port = 8080, debug = true, plugins = plugins) {
         doc.body.new {
-            /** Kweb allows you to modularize your code however suits your needs
-            best.  Here I use an extension function defined elsewhere to
-            draw some common outer page DOM elements */
-            pageBorderAndTitle("Nugget Counter") {
+            pageBorderAndTitle("\uD83D\uDC14 Nugget Counter \uD83C\uDF57") {
 
-                /** A KVar is similar to an AtomicReference in the standard Java
-                Library, but which supports the observer pattern and `map`
-                semantics.  Here I set it to the current URL of the page.
-
-                This will update automatically if the page's URL changes, and
-                if it is modified, the page's URL will change and the DOM will
-                re-render _without_ a page reload.  Yes, seriously. */
                 val url: KVar<URL> = doc.receiver.url(simpleUrlParser)
 
-                /** s.content uses the semanticUIPlugin to use the excellent
-                Semantic UI framework, included as a plugin above, and implemented
-                as a convenient DSL within Kweb */
                 div(s.content.centered).new {
 
-                    /** Note how url.path[0] is itself a KVar.  Changes to firstPathElement
-                    will automatically propagate _bi-directionally_ with `url`.  This
-                    comes in very handy later. */
                     val firstPathElement: KVar<String> = url.path[0]
 
-                    /** Renders `firstPathElement`, but - and here's the fun part - will
-                    automatically re-render if firstPathElement changes.  This is
-                    a simple, elegant, and yet powerful routing mechanism. */
                     render(firstPathElement) { entityType ->
                         when (entityType) {
                             ROOT_PATH -> {
@@ -87,7 +68,6 @@ fun main(args: Array<String>) {
                                         when(action){
                                             loginUrl -> {
                                                 //if UID exists and matches a user, redirect to that user
-                                                //val uid: String? = httpRequestInfo.cookies[uidKey]
                                                 GlobalScope.launch {
                                                     val uid = getString(doc.cookie.receiver, uidKey).await()
                                                     if (uid != null && uid.isNotEmpty() && State.users[uid] != null) {
@@ -123,7 +103,6 @@ fun main(args: Array<String>) {
                                                 }
                                             }
                                             userUrl -> {
-                                                //val uid: String? = httpRequestInfo.cookies[uidKey]
                                                 GlobalScope.launch {
                                                     val uid = getString(doc.cookie.receiver, uidKey).await()
                                                     //if UID doesn't exist or doesn't match this user, redirect to login
@@ -189,10 +168,13 @@ fun main(args: Array<String>) {
 }
 
 private fun ElementCreator<BodyElement>.pageBorderAndTitle(title: String, content: ElementCreator<DivElement>.() -> Unit) {
-    div(s.ui.one.column.centered.grid).new {
-        div(s.column.centered).new {
-            h1(s.ui.dividing.header.centered).text(title)
-            content(this)
+    div(s.container).new {
+        div(s.ui.one.column.center.aligned.grid).new {
+            div(s.column).new {
+                div(s.divider.hidden)   //cheap way to add some margin to the top
+                h1(s.ui.dividing.header).text(title)
+                content(this)
+            }
         }
     }
 }
