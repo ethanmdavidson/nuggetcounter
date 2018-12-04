@@ -34,7 +34,7 @@ const val uidKey = "uid"
 fun main(args: Array<String>) {
     val plugins = listOf(semanticUIPlugin, jsCookiePlugin)
 
-    Kweb(port = 8080, debug = true, plugins = plugins) {
+    Kweb(port = 8081, debug = false, plugins = plugins) {
         doc.body.new {
             pageBorderAndTitle("\uD83D\uDC14 Nugget Counter \uD83C\uDF57") {
 
